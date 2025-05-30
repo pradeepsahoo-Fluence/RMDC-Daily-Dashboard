@@ -64,7 +64,9 @@ How to Access it?
 
 ![image](https://github.com/user-attachments/assets/9cc5abfe-bc11-4e61-9d95-9d0fca584e74)
 
-Conclusion
+Conclusion:
+
+
 The EMEA Node-Down Monitoring Automation delivers a measurable operational and security win for RMDC:
   •	Efficiency – replaces a ~3-hour manual task with an unattended 90-second job, freeing analysts to focus on root-cause and customer communication.
   •	Consistency – applies identical fault logic across all live EMEA sites, eliminating human variance and spreadsheet errors.
