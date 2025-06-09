@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RMDC — Site Availability</title>
+
+  <!-- Tailwind (JIT via CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: { extend: { fontFamily: { sans: ['Inter','sans-serif'] } } }
+    };
+  </script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+
+<body class="antialiased font-sans bg-gray-100 min-h-screen flex flex-col">
+
+<!-- ─── Top Bar ─────────────────────────────────────────────────────────── -->
+<header class="flex items-center justify-between px-6 py-4 bg-blue-700 text-white shadow-md">
+  <h1 class="text-xl font-semibold tracking-wide m-0">RMDC Monitoring — Site Availability</h1>
+  <nav class="space-x-4 text-sm">
+    <a href="{{ url_for('dashboard') }}" class="hover:underline">Dashboard</a>
+    <a href="{{ url_for('compare') }}"    class="hover:underline">Compare</a>
+    <a href="{{ url_for('graphs') }}"     class="hover:underline">Graphs</a>
+  </nav>
+</header>
+
+<!-- ─── Main Content ─────────────────────────────────────────────────────── -->
+<main class="flex-1 px-4 py-8 w-full">
+
+  <!-- Toolbar -->
+  <div class="flex flex-wrap gap-3 items-center">
+    <button
+      class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200"
+      onclick="location.reload()">
+      <span class="mr-2">🔄</span> Refresh list
+    </button>
+
+    <button id="exportCsv"
+      class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition-colors duration-200">
+      📄 Export CSV
+    </button>
+
+    <small class="text-gray-500 text-sm opacity-75 ml-auto">
+      * grey = no update ≥ {{ stale }} min
+    </small>
+  </div>
+
+  <!-- ─── CARD GRID ──────────────────────────────────────────────────────── -->
+  {% if rows %}
+  <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-6 mt-8">
+    {% for r in rows %}
+      {% set badge_color = 'bg-green-500' if r.avail >= 99 else
+                            ('bg-amber-500 text-gray-800' if r.avail >= 90 else 'bg-red-500') %}
+      {% set icon_color  = 'text-green-500' if r.avail >= 99 else
+                            ('text-amber-500' if r.avail >= 90 else 'text-red-500') %}
+      <a href="{{ url_for('sites.detail', site=r.site) }}"
+         class="block bg-white rounded-xl shadow-lg p-6 text-center no-underline text-gray-800
+                transition-transform duration-200 hover:shadow-xl hover:-translate-y-1
+                {{ 'opacity-50' if r.stale else '' }}">
+        <div class="mb-3">
+          {% if r.avail >= 99 %}
+            <svg class="inline-block w-8 h-8 {{ icon_color }}" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+            </svg>
+          {% elif r.avail >= 90 %}
+            <svg class="inline-block w-8 h-8 {{ icon_color }}" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M8.257 3.099c.765-1.3 2.647-1.3 3.412 0l7.283 12.42c.765 1.3-.149 2.91-1.706 2.91H2.68c-1.557 0-2.472-1.61-1.706-2.91l7.283-12.42zM12 15a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v3a1 1 0 002 0V7a1 1 0 00-1-1z" clip-rule="evenodd"/>
+            </svg>
+          {% else %}
+            <svg class="inline-block w-8 h-8 {{ icon_color }}" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"/>
+            </svg>
+          {% endif %}
+        </div>
+
+        <h3 class="text-lg font-bold text-blue-800 mb-1 tracking-tight">{{ r.site }}</h3>
+        <span class="inline-block py-1 px-4 mb-2 rounded-full font-bold text-sm {{ badge_color }}">{{ r.avail }}%</span>
+        <div class="text-sm text-gray-600">{{ r.total - r.down }} / {{ r.total }} online</div>
+        <div class="text-xs text-gray-500 mt-1">Updated {{ r.refreshed_ago }} ago</div>
+      </a>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="text-gray-700 mt-8">No site CSVs found in <code class="bg-gray-200 px-1 py-0.5 rounded">{{ CSV_DIR }}</code>.</p>
+  {% endif %}
+
+  <!-- ─── VERTICAL SUMMARY TABLE ─────────────────────────────────────────── -->
+  {% if rows %}
+  <div class="overflow-x-auto mt-12">
+    <table id="siteTable" class="min-w-full bg-white shadow-md rounded-lg text-sm">
+      <thead class="bg-blue-50">
+        <tr>
+          <th class="py-2 px-3 font-semibold text-left">Sl no</th>
+          <th class="py-2 px-3 font-semibold text-left">Site Name</th>
+          <th class="py-2 px-3 font-semibold text-center">Total Cubes</th>
+          <th class="py-2 px-3 font-semibold text-center">Reachable</th>
+          <th class="py-2 px-3 font-semibold text-center">Un-reachable</th>
+          <!-- <th class="py-2 px-3 font-semibold text-center">SSH issues</th> -->
+          <th class="py-2 px-3 font-semibold text-center">Availability</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="border-t">
+          <td class="py-1.5 px-3">{{ loop.index }}</td>
+          <td class="py-1.5 px-3">{{ r.site }}</td>
+          <td class="py-1.5 px-3 text-center">{{ r.total }}</td>
+          <td class="py-1.5 px-3 text-center">{{ r.total - r.down }}</td>
+          <td class="py-1.5 px-3 text-center">{{ r.down }}</td>
+          <!-- <td class="py-1.5 px-3 text-center">{{ r.ssh_down if r.ssh_down is defined else 0 }}</td> -->
+          <td class="py-1.5 px-3 text-center">{{ '%.2f'|format(r.avail) }}%</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</main>
+
+<!-- ─── CSV Export Logic (vanilla JS) ─────────────────────────────────────── -->
+<script>
+  function downloadTableAsCSV (tableId, filename) {
+    const csv = [...document.querySelectorAll(`#${tableId} tr`)]
+      .map(row =>
+        [...row.querySelectorAll('th,td')]
+          .map(c => '"' + c.innerText.replace(/"/g,'""') + '"')
+          .join(',')
+      ).join('\n');
+
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url  = URL.createObjectURL(blob);
+    const a    = Object.assign(document.createElement('a'), {href:url, download:filename});
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  }
+
+  function stamp () {
+    const d=new Date(),p=n=>n.toString().padStart(2,'0');
+    return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  }
+
+  document.getElementById('exportCsv')?.addEventListener('click', () =>
+    downloadTableAsCSV('siteTable', `site_availability_${stamp()}.csv`));
+</script>
+
+</body>
+</html>

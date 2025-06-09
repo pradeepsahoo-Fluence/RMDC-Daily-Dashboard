@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ site }} — Cube List</title>
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- DataTables core -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+  <!-- ✨ DataTables Buttons (CSV export) -->
+  <link rel="stylesheet" href="https://cdn.datatables.net/buttons/2.4.1/css/buttons.dataTables.min.css">
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/dataTables.buttons.min.js"></script>
+  <script src="https://cdn.datatables.net/buttons/2.4.1/js/buttons.html5.min.js"></script>
+
+  <!-- CSV export doesn’t actually need JSZip, but include for completeness -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+  <style>
+    body { font-family: 'Inter', sans-serif; background-color: #f8f9fa; }
+
+    /* … keep all your existing custom styles here … */
+    .chip{display:inline-flex;align-items:center;gap:.4rem;padding:.4rem 1rem;border-radius:999px;font-size:.875rem;font-weight:600;color:#fff;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+    .chip.ok{background-color:#34a853}.chip.bad{background-color:#ea4335}.chip.info{background-color:#4285f4}
+    .down-row{background-color:#fce8e6}
+    /* trimmed for brevity … everything from your previous CSS can stay */
+  </style>
+</head>
+<body class="antialiased">
+
+<!-- ───── Top bar ────────────────────────────────────────────────────────── -->
+<header class="topbar flex items-center justify-between px-6 py-4 bg-blue-700 text-white shadow-md">
+  <h1 class="text-xl font-semibold m-0">RMDC — {{ site }}</h1>
+  <nav>
+    <a href="{{ url_for('sites.index') }}" class="ml-4 text-sm hover:underline">All Sites</a>
+    <a href="{{ url_for('dashboard') }}" class="ml-4 text-sm hover:underline">Dashboard</a>
+  </nav>
+</header>
+
+<!-- ───── Main content ───────────────────────────────────────────────────── -->
+<main class="w-full px-4 py-8 max-w-7xl mx-auto">
+
+  <!-- Filter chips + Export button -->
+  <div class="flex flex-wrap gap-3 items-center mb-6">
+    <button class="chip info" data-filter="all">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-7-8a7 7 0 1114 0H3z" clip-rule="evenodd"></path></svg>
+      {{ total }} cubes
+    </button>
+
+    <button class="chip ok" data-filter="reachable">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+      {{ good }} reachable
+    </button>
+
+    <button class="chip bad" data-filter="issues">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd"></path></svg>
+      {{ bad }} issues
+    </button>
+
+    <button class="chip info" data-filter="avail">
+      <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9.293 12.95a1 1 0 00.141 1.404.999.999 0 001.404-.141L12 12.017V17a1 1 0 102 0v-5a1 1 0 00-1.707-.707L10 11.414l-1.293-1.293a1 1 0 00-1.414 1.414z" clip-rule="evenodd"></path></svg>
+      {{ avail }} % availability
+    </button>
+
+    <!-- Export CSV -->
+    <button id="exportCsv" class="ml-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md flex items-center gap-2">
+      <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M3 3a2 2 0 012-2h6a2 2 0 012 2v2h4v1h-1v11a2 2 0 01-2 2H4a2 2 0 01-2-2V3zm9 0H5v14h10V6h-3a2 2 0 01-2-2V3z"/><path d="M9 8h2v5H9V8zm0 6h2v2H9v-2z"/></svg>
+      Export&nbsp;CSV
+    </button>
+  </div>
+
+  <!-- Loading indicator -->
+  <div id="loadingIndicator" class="text-center py-8 text-gray-600">
+    <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500 mx-auto mb-2"></div>
+    Loading cube data…
+  </div>
+
+{% if records %}
+  <!-- Data table -->
+  <table id="cubeTable" class="w-full text-left border-collapse">
+    <thead>
+      <tr>
+        <th>Date / Time</th><th>Device</th><th>Ping</th><th>SSH</th><th>Telnet</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r in records %}
+      <tr class="{{ 'down-row' if r.Offline else '' }}">
+        <td>{{ r.time }}</td>
+        <td>{{ r['Device name'] }}</td>
+        <td>{{ r.Ping }}</td>
+        <td>{{ r.SSH }}</td>
+        <td>{{ r.Telnet }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <script>
+    $(function () {
+      const table = $('#cubeTable').DataTable({
+        pageLength: 25,
+        order: [[0, 'desc']],
+        lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'All']],
+        autoWidth: false,
+        dom: 'Bfrtip',
+        buttons: [{ extend: 'csv', title: '{{ site }}_cubes' }],
+        columnDefs: [{
+          targets: [2, 3, 4],
+          render: function (data, type) {
+            if (type === 'display') {
+              if (['OK','Up','Reachable'].includes(data)) {
+                return '<span class="text-green-600 font-semibold flex items-center"><svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>OK</span>';
+              } else if (['Down','Unreachable','Fail'].includes(data)) {
+                return '<span class="text-red-600 font-semibold flex items-center"><svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>Down</span>';
+              }
+            }
+            return data;
+          }
+        }]
+      });
+
+      // Hide spinner once DataTable is ready
+      $('#loadingIndicator').hide();
+
+      // Export button triggers DataTables CSV export
+      $('#exportCsv').on('click', () => table.button('.buttons-csv').trigger());
+
+      // Filter chips
+      $('[data-filter]').on('click', function () {
+        const mode = $(this).data('filter');
+        $('[data-filter]').removeClass('ring-2 ring-offset-2 ring-blue-500');
+        $(this).addClass('ring-2 ring-offset-2 ring-blue-500');
+
+        switch (mode) {
+          case 'reachable':
+            table.column(2).search('^OK$', true).column(3).search('^OK$', true).column(4).search('^OK$', true).draw();
+            break;
+          case 'issues':
+            table.column(2).search('Down|Unreachable|Fail', true, false)
+                 .column(3).search('Down|Unreachable|Fail', true, false)
+                 .column(4).search('Down|Unreachable|Fail', true, false).draw();
+            break;
+          case 'avail':
+            table.column(2).search('^OK$', true).column(3).search('^OK$', true).column(4).search('^OK$', true).draw();
+            break;
+          default:
+            table.columns().search('').draw(); // show all
+        }
+      });
+    });
+  </script>
+{% else %}
+  <p class="text-gray-700 mt-8">No cube records found in the latest CSV for this site.</p>
+{% endif %}
+</main>
+</body>
+</html>
